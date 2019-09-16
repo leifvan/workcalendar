@@ -12,6 +12,7 @@ from colorama import Style, Fore, Back
 parser = argparse.ArgumentParser()
 #parser.add_argument('hours', type=float)
 parser.add_argument('-range',type=int, default=20)
+parser.add_argument('-week_hours', type=int, default=20)
 
 args = parser.parse_args()
 
@@ -57,7 +58,7 @@ for event in events:
     if event['summary'] == 'Arbeiten':
         end_val = iso8601.parse_date(end)
         duration = end_val - start_val
-        next_work_dates.append((start_val, duration))
+        next_work_dates.append((start_val, duration, end_val))
     elif event['summary'] == 'Urlaub':
         next_holiday_dates.append(start_val)
     else:
@@ -69,10 +70,11 @@ for event in events:
 
 
 def get_time_on_day(date):
-    for datet, duration in next_work_dates:
+    summed_time = 0
+    for datet, duration, _ in next_work_dates:
         if datet.date() == date:
-            return duration.seconds / 60 / 60
-    return 0
+            summed_time += duration.seconds / 60 / 60
+    return summed_time
 
 
 def is_holiday_on_day(date):
@@ -87,10 +89,17 @@ def get_pause(hours):
     return 0
 
 
+def get_actual_pause(date):
+    todaytes = [(ds,de) for ds, _, de in next_work_dates if ds.date() == date]
+    time_between = 0
+    for (d1s, d1e), (d2s, d2e) in zip(todaytes, todaytes[1:]):
+        time_between += (d2s - d1e).seconds / 60 / 60
+    return time_between
+
+
 # analyze the next days
 
-#overtime = args.hours
-weekday_minus = 4
+weekday_minus = args.week_hours / 5
 
 if overtime < 0:
     current_ot_string = f"current overtime: {Fore.RED}{Style.BRIGHT}{overtime}h{Style.RESET_ALL}"
@@ -105,7 +114,7 @@ last_month = datetime.date.today().month
 for date in [datetime.date.today()+datetime.timedelta(days=i) for i in range(args.range)]:
     day = date.strftime("%a")
     work_time = get_time_on_day(date)
-    pause_time = get_pause(work_time)
+    pause_time = max(0, get_pause(work_time) - get_actual_pause(date))
 
     day_label = ""
     warn_label = ""
